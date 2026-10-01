@@ -1,0 +1,26 @@
+name: F11Football
+options:
+  bundleIdPrefix: com.fahad
+settings:
+  base:
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  F11Football:
+    type: application
+    platform: iOS
+    sources:
+      - F11Football
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fahad.f11football
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: NO
+        DEVELOPMENT_TEAM: ""
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - sdk: SpriteKit.framework
