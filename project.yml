@@ -23,4 +23,4 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
-      - sdk: SpriteKit.framework
+      - sdk: SceneKit.framework
