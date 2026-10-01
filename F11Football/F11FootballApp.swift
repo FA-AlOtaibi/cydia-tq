@@ -108,7 +108,7 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
     override func update(_ currentTime:TimeInterval){
         if lastUpdate == 0 {lastUpdate = currentTime};let dt = min(currentTime-lastUpdate,0.04);lastUpdate = currentTime
         if ended{return};elapsed += dt
-        if elapsed>= 300 {ended = true;showEnd();return}
+        if elapsed >= 300 {ended = true;showEnd();return}
         updateScore(); updateControlled(); updateAI(red,attackingLeft:true); updateAI(blue.filter{$0 !==  controlled},attackingLeft:false); keepBallInPlay(); selectNearest()
     }
     private func updateControlled(){
