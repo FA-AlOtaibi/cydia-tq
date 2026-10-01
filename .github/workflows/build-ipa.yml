@@ -1,0 +1,26 @@
+name: Build F11 Football IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build unsigned iOS app
+        run: |
+          xcodebuild -project F11Football.xcodeproj -scheme F11Football -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/F11Football.app Payload/
+          zip -r F11Football-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: F11Football-IPA
+          path: F11Football-unsigned.ipa
