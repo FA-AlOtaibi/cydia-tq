@@ -36,7 +36,7 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
             self.team = team
             super.init()
             path = CGPath(ellipseIn: CGRect(x:-15,y:-15,width:30,height:30), transform:nil)
-            fillColor = team = =  .blue ? .systemBlue : .systemRed
+            fillColor = team ==  .blue ? .systemBlue : .systemRed
             strokeColor = .white; lineWidth = 2
             let n = SKLabelNode(text:"\(number)"); n.fontName = "AvenirNext-Bold"; n.fontSize = 12; n.verticalAlignmentMode = .center; addChild(n)
             physicsBody = SKPhysicsBody(circleOfRadius:15); physicsBody?.isDynamic = true; physicsBody?.affectedByGravity = false
@@ -67,7 +67,7 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
     }
     private func buildPitch(){
         let grass = SKShapeNode(rect:pitch,cornerRadius:3);grass.fillColor = SKColor(red:0.08,green:0.43,blue:0.17,alpha:1);grass.strokeColor = .white;grass.lineWidth = 4;addChild(grass)
-        for i in 0..<10 { let stripe = SKShapeNode(rect:CGRect(x:pitch.minX+CGFloat(i)*pitch.width/10,y:pitch.minY,width:pitch.width/10,height:pitch.height));stripe.fillColor = i%2 = = 0 ? SKColor(white:1,alpha:0.035):.clear;stripe.strokeColor = .clear;stripe.zPosition = 0.5;addChild(stripe)}
+        for i in 0..<10 { let stripe = SKShapeNode(rect:CGRect(x:pitch.minX+CGFloat(i)*pitch.width/10,y:pitch.minY,width:pitch.width/10,height:pitch.height));stripe.fillColor = i%2 == 0 ? SKColor(white:1,alpha:0.035):.clear;stripe.strokeColor = .clear;stripe.zPosition = 0.5;addChild(stripe)}
         line(CGPoint(x:640,y:pitch.minY),CGPoint(x:640,y:pitch.maxY))
         let c = SKShapeNode(circleOfRadius:78);c.position = CGPoint(x:640,y:360);c.strokeColor = .white;c.lineWidth = 3;c.fillColor = .clear;c.zPosition = 1;addChild(c)
         for x in [pitch.minX,pitch.maxX-145] { let box = SKShapeNode(rect:CGRect(x:x,y:215,width:145,height:290));box.strokeColor = .white;box.lineWidth = 3;box.fillColor = .clear;box.zPosition = 1;addChild(box)}
@@ -79,8 +79,8 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
         let bx:[CGFloat] = [125,315,315,315,315,510,510,510,510,600,600]
         let rx = bx.map{1280-$0}
         for i in 0..<11 {
-            let b = Player(team:.blue,number:i+1);b.position = CGPoint(x:bx[i],y:ys[i]);b.home = b.position;b.isKeeper = i = = 0;addChild(b);blue.append(b)
-            let r = Player(team:.red,number:i+1);r.position = CGPoint(x:rx[i],y:ys[i]);r.home = r.position;r.isKeeper = i = = 0;addChild(r);red.append(r)
+            let b = Player(team:.blue,number:i+1);b.position = CGPoint(x:bx[i],y:ys[i]);b.home = b.position;b.isKeeper = i == 0;addChild(b);blue.append(b)
+            let r = Player(team:.red,number:i+1);r.position = CGPoint(x:rx[i],y:ys[i]);r.home = r.position;r.isKeeper = i == 0;addChild(r);red.append(r)
         }
         controlled = blue[9]
         ball.fillColor = .white;ball.strokeColor = .black;ball.lineWidth = 2;ball.zPosition = 5
@@ -106,10 +106,10 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
         controlled = blue[9]
     }
     override func update(_ currentTime:TimeInterval){
-        if lastUpdate = = 0 {lastUpdate = currentTime};let dt = min(currentTime-lastUpdate,0.04);lastUpdate = currentTime
-        if ended{return};elapsed + = dt
-        if elapsed> = 300 {ended = true;showEnd();return}
-        updateScore(); updateControlled(); updateAI(red,attackingLeft:true); updateAI(blue.filter{$0 ! = =  controlled},attackingLeft:false); keepBallInPlay(); selectNearest()
+        if lastUpdate == 0 {lastUpdate = currentTime};let dt = min(currentTime-lastUpdate,0.04);lastUpdate = currentTime
+        if ended{return};elapsed += dt
+        if elapsed>= 300 {ended = true;showEnd();return}
+        updateScore(); updateControlled(); updateAI(red,attackingLeft:true); updateAI(blue.filter{$0 !==  controlled},attackingLeft:false); keepBallInPlay(); selectNearest()
     }
     private func updateControlled(){
         let speed:CGFloat = 245
@@ -122,8 +122,8 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
             let d = hypot(ball.position.x-p.position.x,ball.position.y-p.position.y)
             var target = p.home
             if p.isKeeper { target = CGPoint(x:attackingLeft ? pitch.maxX-28:pitch.minX+28,y:min(430,max(290,ball.position.y))) }
-            else if d < 185 || nearest(to:ball.position,in:team) = = = p {target = ball.position}
-            else { target.x + = (ball.position.x-640)*0.16;target.y + = (ball.position.y-360)*0.12 }
+            else if d < 185 || nearest(to:ball.position,in:team) === p {target = ball.position}
+            else { target.x += (ball.position.x-640)*0.16;target.y += (ball.position.y-360)*0.12 }
             let dx = target.x-p.position.x,dy = target.y-p.position.y,len = max(1,hypot(dx,dy))
             p.physicsBody?.velocity = CGVector(dx:dx/len*155,dy:dy/len*155)
             if d<30 { let dir:CGFloat = attackingLeft ? -1:1; ball.physicsBody?.applyImpulse(CGVector(dx:dir*5.2,dy:(360-p.position.y)*0.012)) }
@@ -135,7 +135,7 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
         guard hypot(controlled.position.x-ball.position.x,controlled.position.y-ball.position.y)<48 else{return}
         var v = CGVector(dx:1,dy:0)
         if pass {
-            let mates = blue.filter{$0 ! = =  controlled && $0.position.x>controlled.position.x-20}
+            let mates = blue.filter{$0 !==  controlled && $0.position.x>controlled.position.x-20}
             if let t = mates.min(by:{hypot($0.position.x-controlled.position.x-150,$0.position.y-controlled.position.y)<hypot($1.position.x-controlled.position.x-150,$1.position.y-controlled.position.y)}) {
                 let dx = t.position.x-ball.position.x,dy = t.position.y-ball.position.y,l = max(1,hypot(dx,dy));v = CGVector(dx:dx/l,dy:dy/l)
             }
@@ -143,8 +143,8 @@ final class FootballScene: SKScene, SKPhysicsContactDelegate {
         ball.physicsBody?.velocity = CGVector(dx:v.dx*power,dy:v.dy*power)
     }
     private func keepBallInPlay(){
-        if ball.position.x < pitch.minX-7 && ball.position.y>285 && ball.position.y<435 {scoreRed + = 1;resetKickoff()}
-        if ball.position.x > pitch.maxX+7 && ball.position.y>285 && ball.position.y<435 {scoreBlue + = 1;resetKickoff()}
+        if ball.position.x < pitch.minX-7 && ball.position.y>285 && ball.position.y<435 {scoreRed += 1;resetKickoff()}
+        if ball.position.x > pitch.maxX+7 && ball.position.y>285 && ball.position.y<435 {scoreBlue += 1;resetKickoff()}
     }
     private func showEnd(){
         let shade = SKShapeNode(rectOf:CGSize(width:620,height:230),cornerRadius:28);shade.position = CGPoint(x:640,y:360);shade.fillColor = SKColor.black.withAlphaComponent(0.82);shade.zPosition = 50;addChild(shade)
