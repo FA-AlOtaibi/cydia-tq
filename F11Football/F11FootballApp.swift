@@ -172,7 +172,7 @@ final class FootballGame: NSObject, ObservableObject, SCNSceneRendererDelegate {
                 let n=SCNNode(geometry:post); n.position=SCNVector3(x,1.22,z); scene.rootNode.addChildNode(n)
             }
             let bar=SCNCylinder(radius:0.07,height:CGFloat(goalHalf*2)); bar.firstMaterial?.diffuse.contents=UIColor.white
-            let bn=SCNNode(geometry:bar); bn.eulerAngles.z=.pi/2; bn.position=SCNVector3(0,2.44,z); scene.rootNode.addChildNode(bn)
+            let bn=SCNNode(geometry:bar); bn.eulerAngles.z = .pi/2; bn.position=SCNVector3(0,2.44,z); scene.rootNode.addChildNode(bn)
         }
     }
     private func addStadium() {
