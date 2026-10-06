@@ -34,7 +34,10 @@ enum Scale:String,CaseIterable,Identifiable { case x1="Original",x2="2×",x4="4�
 enum Codec:String,CaseIterable,Identifiable { case hevc="HEVC",h264="H.264";var id:String{rawValue} }
 
 @MainActor final class Processor:ObservableObject {
-  working = false
+ @Published var progress = 0.0
+ @Published var message = "جاهز"
+ @Published var output: URL?
+ @Published var working = false
  func process(_ input:URL,engine:Engine,scale:Scale,codec:Codec,denoise:Double,sharp:Double) async {
   working=true;progress=0;output=nil;message="تحليل الفيديو…"
   do {
