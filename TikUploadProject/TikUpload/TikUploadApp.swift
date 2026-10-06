@@ -25,9 +25,9 @@ enum Engine:String,CaseIterable,Identifiable {
  var id:String{rawValue}
  var note:String { switch self {
   case .native:return "VideoToolbox + Core Image — الأسرع والأقل استهلاكًا"
-  case .detail:return "تحسين تفاصيل وDenoise/Sharpen قوي — جاهز لربط Real-ESRGAN"
-  case .temporal:return "تحسين متعدد الفريمات — أفضل للحركة، جاهز لربط BasicVSR++"
-  case .anime:return "إعدادات مخصصة للأنمي والرسوم — جاهز لنموذج AnimeVideo"
+  case .detail:return "Real-ESRGAN x2plus/x4plus — تحسين AI فعلي لكل فريم"
+  case .temporal:return "Real-ESRGAN General — سريع ومتوازن للفيديو"
+  case .anime:return "Real-ESRGAN AnimeVideo — مخصص للأنمي والرسوم"
  }}
 }
 enum Scale:String,CaseIterable,Identifiable { case x1="Original",x2="2×",x4="4×";var id:String{rawValue};var value:CGFloat{self == .x4 ? 4:self == .x2 ? 2:1} }
@@ -91,7 +91,7 @@ struct ContentView:View {
     card{Text("المحرك").font(.headline);ForEach(Engine.allCases){e in Button{engine=e}{HStack(alignment:.top){Image(systemName:engine==e ? "checkmark.circle.fill":"circle").foregroundStyle(engine==e ? .cyan:.secondary);VStack(alignment:.leading){Text(e.rawValue).foregroundStyle(.primary);Text(e.note).font(.caption).foregroundStyle(.secondary)};Spacer()}.padding(.vertical,5)}}}
     card{Text("الإخراج").font(.headline);Picker("Scale",selection:$scale){ForEach(Scale.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);Picker("Codec",selection:$codec){ForEach(Codec.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);HStack{Text("Denoise");Slider(value:$denoise);Text("\(Int(denoise*100))").monospacedDigit().frame(width:30)};HStack{Text("Sharpen");Slider(value:$sharp);Text("\(Int(sharp*100))").monospacedDigit().frame(width:30)}}
     card{Text(p.message).font(.footnote);if p.working{ProgressView(value:p.progress);Text("\(Int(p.progress*100))%").font(.caption).monospacedDigit()};Button{if let m=movie{Task{await p.process(m.url,engine:engine,scale:scale,codec:codec,denoise:denoise,sharp:sharp)}}}label:{Label("ابدأ التحسين",systemImage:"wand.and.stars").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.borderedProminent).tint(.cyan).disabled(movie==nil || p.working);if p.output != nil{Button{share=true}label:{Label("إرسال الملف الناتج إلى TikTok / مشاركة",systemImage:"square.and.arrow.up").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.bordered)}}
-    Text("Fast Native يعمل بالكامل الآن على الجهاز. أوضاع AI الثقيلة ظاهرة كمسارات مستقلة، والنسخة الحالية تستخدم fallback محلي حتى تُضمّن أوزان النماذج داخل التطبيق. لا يوجد TikTok API أو Token. TikTok قد يعيد معالجة الملف بعد استلامه.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+    Text("النماذج AI مضمّنة وتعمل محليًا على الجهاز. لا يوجد TikTok API أو Token. TikTok قد يعيد معالجة الملف بعد استلامه.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
    }.padding(18)}
   }.preferredColorScheme(.dark)}.onChange(of:item){_,v in guard let v else{return};Task{movie=try? await v.loadTransferable(type:Movie.self);p.output=nil;p.message="جاهز"}}.sheet(isPresented:$share){if let u=p.output{ShareSheet(url:u)}}}
  func card<C:View>(@ViewBuilder _ c:()->C)->some View{VStack(alignment:.leading,spacing:12){c()}.padding(17).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:23)).overlay(RoundedRectangle(cornerRadius:23).stroke(.white.opacity(0.08)))}
