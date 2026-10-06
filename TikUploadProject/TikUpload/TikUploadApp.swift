@@ -45,19 +45,35 @@ enum Codec:String,CaseIterable,Identifiable { case hevc="HEVC",h264="H.264";var 
    let maxSide=max(base.width,base.height)
    if maxSide*factor>3840 { factor=3840/maxSide }
    let outSize=CGSize(width:max(2,(base.width*factor).rounded(.down)),height:max(2,(base.height*factor).rounded(.down)))
-   let composition=AVMutableVideoComposition(asset:asset){ request in
-    var image=request.sourceImage.clampedToExtent()
-    if denoise>0 {
-     let n=CIFilter.noiseReduction();n.inputImage=image;n.noiseLevel=Float(min(0.1,denoise*0.1));n.sharpness=0.4;image=n.outputImage ?? image
+   let ai: RealESRGANEngine? = {
+    do {
+     switch engine {
+     case .detail: return try RealESRGANEngine(kind: scale == .x2 ? .x2plus : .x4plus)
+     case .temporal: return try RealESRGANEngine(kind: .general)
+     case .anime: return try RealESRGANEngine(kind: .animevideo)
+     case .native: return nil
+     }
+    } catch { return nil }
+   }()
+   if engine != .native && ai == nil {
+    throw NSError(domain:"VideoLabAI",code:20,userInfo:[NSLocalizedDescriptionKey:"تعذر تحميل نموذج Real-ESRGAN المضمّن"])
+   }
+   let composition = AVMutableVideoComposition(asset: asset) { request in
+    var image = request.sourceImage.clampedToExtent()
+    if denoise > 0 {
+     let n = CIFilter.noiseReduction(); n.inputImage = image; n.noiseLevel = Float(min(0.1, denoise * 0.1)); n.sharpness = 0.4; image = n.outputImage ?? image
     }
-    if sharp>0 {
-     let s=CIFilter.sharpenLuminance();s.inputImage=image;s.sharpness=Float(sharp*1.2);image=s.outputImage ?? image
+    if sharp > 0 {
+     let s = CIFilter.sharpenLuminance(); s.inputImage = image; s.sharpness = Float(sharp * 1.2); image = s.outputImage ?? image
     }
-    if engine == .anime {
-     let c=CIFilter.colorControls();c.inputImage=image;c.saturation=1.05;c.contrast=1.03;image=c.outputImage ?? image
+    if let ai {
+     do { image = try ai.upscale(image, target: outSize) }
+     catch { request.finish(with: error); return }
+    } else {
+     let e = image.extent
+     image = image.transformed(by: CGAffineTransform(scaleX: outSize.width / e.width, y: outSize.height / e.height))
     }
-    let e=image.extent; let sx=outSize.width/e.width, sy=outSize.height/e.height
-    request.finish(with:image.transformed(by:CGAffineTransform(scaleX:sx,y:sy)).cropped(to:CGRect(origin:.zero,size:outSize)),context:nil)
+    request.finish(with: image.cropped(to: CGRect(origin: .zero, size: outSize)), context: nil)
    }
    composition.renderSize=outSize
    let fps=try await track.load(.nominalFrameRate); composition.frameDuration=CMTime(value:1,timescale:CMTimeScale(max(24,min(60,Int32(fps.rounded())))))
@@ -87,10 +103,10 @@ struct ContentView:View {
    LinearGradient(colors:[.black,Color(red:0.025,green:0.055,blue:0.08)],startPoint:.top,endPoint:.bottom).ignoresSafeArea()
    ScrollView{VStack(spacing:18){
     VStack(spacing:5){Image(systemName:"sparkles.tv.fill").font(.system(size:55)).foregroundStyle(.cyan);Text("VideoLab").font(.system(size:34,weight:.bold,design:.rounded));Text("Upscale • Restore • TikTok").foregroundStyle(.secondary)}
-    card{PhotosPicker(selection:$item,matching:.videos){HStack{Image(systemName:"film.stack");Text(movie==nil ? "اختر الفيديو الأصلي":"تم اختيار الفيديو");Spacer();Image(systemName:"chevron.right")}.padding(14).background(.white.opacity(0.07),in:RoundedRectangle(cornerRadius:15))}}
-    card{Text("المحرك").font(.headline);ForEach(Engine.allCases){e in Button{engine=e}{HStack(alignment:.top){Image(systemName:engine==e ? "checkmark.circle.fill":"circle").foregroundStyle(engine==e ? .cyan:.secondary);VStack(alignment:.leading){Text(e.rawValue).foregroundStyle(.primary);Text(e.note).font(.caption).foregroundStyle(.secondary)};Spacer()}.padding(.vertical,5)}}}
+    card{PhotosPicker(selection:$item,matching:.videos){HStack{Image(systemName:"film.stack");Text(movie == nil ? "اختر الفيديو الأصلي":"تم اختيار الفيديو");Spacer();Image(systemName:"chevron.right")}.padding(14).background(.white.opacity(0.07),in:RoundedRectangle(cornerRadius:15))}}
+    card{Text("المحرك").font(.headline);ForEach(Engine.allCases){e in Button{engine=e}{HStack(alignment:.top){Image(systemName:engine == e ? "checkmark.circle.fill":"circle").foregroundStyle(engine == e ? .cyan:.secondary);VStack(alignment:.leading){Text(e.rawValue).foregroundStyle(.primary);Text(e.note).font(.caption).foregroundStyle(.secondary)};Spacer()}.padding(.vertical,5)}}}
     card{Text("الإخراج").font(.headline);Picker("Scale",selection:$scale){ForEach(Scale.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);Picker("Codec",selection:$codec){ForEach(Codec.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);HStack{Text("Denoise");Slider(value:$denoise);Text("\(Int(denoise*100))").monospacedDigit().frame(width:30)};HStack{Text("Sharpen");Slider(value:$sharp);Text("\(Int(sharp*100))").monospacedDigit().frame(width:30)}}
-    card{Text(p.message).font(.footnote);if p.working{ProgressView(value:p.progress);Text("\(Int(p.progress*100))%").font(.caption).monospacedDigit()};Button{if let m=movie{Task{await p.process(m.url,engine:engine,scale:scale,codec:codec,denoise:denoise,sharp:sharp)}}}label:{Label("ابدأ التحسين",systemImage:"wand.and.stars").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.borderedProminent).tint(.cyan).disabled(movie==nil || p.working);if p.output != nil{Button{share=true}label:{Label("إرسال الملف الناتج إلى TikTok / مشاركة",systemImage:"square.and.arrow.up").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.bordered)}}
+    card{Text(p.message).font(.footnote);if p.working{ProgressView(value:p.progress);Text("\(Int(p.progress*100))%").font(.caption).monospacedDigit()};Button{if let m=movie{Task{await p.process(m.url,engine:engine,scale:scale,codec:codec,denoise:denoise,sharp:sharp)}}}label:{Label("ابدأ التحسين",systemImage:"wand.and.stars").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.borderedProminent).tint(.cyan).disabled(movie == nil || p.working);if p.output != nil{Button{share=true}label:{Label("إرسال الملف الناتج إلى TikTok / مشاركة",systemImage:"square.and.arrow.up").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.bordered)}}
     Text("النماذج AI مضمّنة وتعمل محليًا على الجهاز. لا يوجد TikTok API أو Token. TikTok قد يعيد معالجة الملف بعد استلامه.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
    }.padding(18)}
   }.preferredColorScheme(.dark)}.onChange(of:item){_,v in guard let v else{return};Task{movie=try? await v.loadTransferable(type:Movie.self);p.output=nil;p.message="جاهز"}}.sheet(isPresented:$share){if let u=p.output{ShareSheet(url:u)}}}
