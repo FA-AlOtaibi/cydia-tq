@@ -80,7 +80,7 @@ enum Codec:String,CaseIterable,Identifiable { case hevc="HEVC",h264="H.264";var 
    let out=FileManager.default.temporaryDirectory.appendingPathComponent("VideoLab-"+UUID().uuidString).appendingPathExtension("mov")
    guard let export=AVAssetExportSession(asset:asset,presetName: codec == .hevc ? AVAssetExportPresetHEVCHighestQuality:AVAssetExportPresetHighestQuality) else{throw NSError(domain:"VideoLab",code:2,userInfo:[NSLocalizedDescriptionKey:"تعذر إنشاء جلسة التصدير"])}
    export.videoComposition=composition;export.outputURL=out;export.outputFileType=.mov;export.shouldOptimizeForNetworkUse=false
-   message=engine == .native ? "معالجة Native…":"معالجة \(engine.rawValue)…"
+   message = engine == .native ? "معالجة Native…" : "معالجة \\(engine.rawValue)…"
    let watcher=Task { while !Task.isCancelled { self.progress=Double(export.progress); try? await Task.sleep(for:.milliseconds(150)) } }
    await export.export();watcher.cancel()
    guard export.status == .completed else{throw export.error ?? NSError(domain:"VideoLab",code:3,userInfo:[NSLocalizedDescriptionKey:"فشل التصدير"])}
