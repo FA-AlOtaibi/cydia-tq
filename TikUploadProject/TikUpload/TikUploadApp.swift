@@ -96,19 +96,104 @@ struct ShareSheet:UIViewControllerRepresentable {
  func updateUIViewController(_ uiViewController:UIActivityViewController,context:Context){}
 }
 
-struct ContentView:View {
- @StateObject var p=Processor();@State var item:PhotosPickerItem?;@State var movie:Movie?;@State var engine:Engine = .native;@State var scale:Scale = .x2;@State var codec:Codec = .hevc;@State var denoise=0.25;@State var sharp=0.35;@State var share=false
- var body:some View {
-  NavigationStack{ZStack{
-   LinearGradient(colors:[.black,Color(red:0.025,green:0.055,blue:0.08)],startPoint:.top,endPoint:.bottom).ignoresSafeArea()
-   ScrollView{VStack(spacing:18){
-    VStack(spacing:5){Image(systemName:"sparkles.tv.fill").font(.system(size:55)).foregroundStyle(.cyan);Text("VideoLab").font(.system(size:34,weight:.bold,design:.rounded));Text("Upscale • Restore • TikTok").foregroundStyle(.secondary)}
-    card{PhotosPicker(selection:$item,matching:.videos){HStack{Image(systemName:"film.stack");Text(movie == nil ? "اختر الفيديو الأصلي":"تم اختيار الفيديو");Spacer();Image(systemName:"chevron.right")}.padding(14).background(.white.opacity(0.07),in:RoundedRectangle(cornerRadius:15))}}
-    card{Text("المحرك").font(.headline);ForEach(Engine.allCases){e in Button{engine=e}{HStack(alignment:.top){Image(systemName:engine == e ? "checkmark.circle.fill":"circle").foregroundStyle(engine == e ? .cyan:.secondary);VStack(alignment:.leading){Text(e.rawValue).foregroundStyle(.primary);Text(e.note).font(.caption).foregroundStyle(.secondary)};Spacer()}.padding(.vertical,5)}}}
-    card{Text("الإخراج").font(.headline);Picker("Scale",selection:$scale){ForEach(Scale.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);Picker("Codec",selection:$codec){ForEach(Codec.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);HStack{Text("Denoise");Slider(value:$denoise);Text("\(Int(denoise*100))").monospacedDigit().frame(width:30)};HStack{Text("Sharpen");Slider(value:$sharp);Text("\(Int(sharp*100))").monospacedDigit().frame(width:30)}}
-    card{Text(p.message).font(.footnote);if p.working{ProgressView(value:p.progress);Text("\(Int(p.progress*100))%").font(.caption).monospacedDigit()};Button{if let m=movie{Task{await p.process(m.url,engine:engine,scale:scale,codec:codec,denoise:denoise,sharp:sharp)}}}label:{Label("ابدأ التحسين",systemImage:"wand.and.stars").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.borderedProminent).tint(.cyan).disabled(movie == nil || p.working);if p.output != nil{Button{share=true}label:{Label("إرسال الملف الناتج إلى TikTok / مشاركة",systemImage:"square.and.arrow.up").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.bordered)}}
-    Text("النماذج AI مضمّنة وتعمل محليًا على الجهاز. لا يوجد TikTok API أو Token. TikTok قد يعيد معالجة الملف بعد استلامه.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-   }.padding(18)}
-  }.preferredColorScheme(.dark)}.onChange(of:item){_,v in guard let v else{return};Task{movie=try? await v.loadTransferable(type:Movie.self);p.output=nil;p.message="جاهز"}}.sheet(isPresented:$share){if let u=p.output{ShareSheet(url:u)}}}
- func card<C:View>(@ViewBuilder _ c:()->C)->some View{VStack(alignment:.leading,spacing:12){c()}.padding(17).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:23)).overlay(RoundedRectangle(cornerRadius:23).stroke(.white.opacity(0.08)))}
+struct ContentView: View {
+ @StateObject private var p = Processor()
+ @State private var item: PhotosPickerItem?
+ @State private var movie: Movie?
+ @State private var engine: Engine = .native
+ @State private var scale: Scale = .x2
+ @State private var codec: Codec = .hevc
+ @State private var denoise = 0.25
+ @State private var sharp = 0.35
+ @State private var share = false
+
+ var body: some View {
+  NavigationStack {
+   ZStack {
+    LinearGradient(colors: [.black, Color(red: 0.025, green: 0.055, blue: 0.08)], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+    ScrollView {
+     VStack(spacing: 18) {
+      header
+      pickerCard
+      engineCard
+      outputCard
+      actionCard
+      Text("النماذج AI مضمّنة وتعمل محليًا على الجهاز. لا يوجد TikTok API أو Token. TikTok قد يعيد معالجة الملف بعد استلامه.")
+       .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+     }.padding(18)
+    }
+   }.preferredColorScheme(.dark)
+  }
+  .onChange(of: item) { _, value in
+   guard let value else { return }
+   Task { movie = try? await value.loadTransferable(type: Movie.self); p.output = nil; p.message = "جاهز" }
+  }
+  .sheet(isPresented: $share) { if let url = p.output { ShareSheet(url: url) } }
+ }
+
+ private var header: some View {
+  VStack(spacing: 5) {
+   Image(systemName: "sparkles.tv.fill").font(.system(size: 55)).foregroundStyle(.cyan)
+   Text("VideoLab").font(.system(size: 34, weight: .bold, design: .rounded))
+   Text("Upscale • Restore • TikTok").foregroundStyle(.secondary)
+  }
+ }
+
+ private var pickerCard: some View {
+  card {
+   PhotosPicker(selection: $item, matching: .videos) {
+    HStack {
+     Image(systemName: "film.stack")
+     Text(movie == nil ? "اختر الفيديو الأصلي" : "تم اختيار الفيديو")
+     Spacer(); Image(systemName: "chevron.right")
+    }.padding(14).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 15))
+   }
+  }
+ }
+
+ private var engineCard: some View {
+  card {
+   Text("المحرك").font(.headline)
+   ForEach(Engine.allCases) { e in
+    Button { engine = e } label: {
+     HStack(alignment: .top) {
+      Image(systemName: engine == e ? "checkmark.circle.fill" : "circle").foregroundStyle(engine == e ? .cyan : .secondary)
+      VStack(alignment: .leading) { Text(e.rawValue).foregroundStyle(.primary); Text(e.note).font(.caption).foregroundStyle(.secondary) }
+      Spacer()
+     }.padding(.vertical, 5)
+    }
+   }
+  }
+ }
+
+ private var outputCard: some View {
+  card {
+   Text("الإخراج").font(.headline)
+   Picker("Scale", selection: $scale) { ForEach(Scale.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+   Picker("Codec", selection: $codec) { ForEach(Codec.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+   HStack { Text("Denoise"); Slider(value: $denoise); Text("\(Int(denoise * 100))").monospacedDigit().frame(width: 30) }
+   HStack { Text("Sharpen"); Slider(value: $sharp); Text("\(Int(sharp * 100))").monospacedDigit().frame(width: 30) }
+  }
+ }
+
+ private var actionCard: some View {
+  card {
+   Text(p.message).font(.footnote)
+   if p.working { ProgressView(value: p.progress); Text("\(Int(p.progress * 100))%").font(.caption).monospacedDigit() }
+   Button {
+    guard let movie else { return }
+    Task { await p.process(movie.url, engine: engine, scale: scale, codec: codec, denoise: denoise, sharp: sharp) }
+   } label: { Label("ابدأ التحسين", systemImage: "wand.and.stars").frame(maxWidth: .infinity).padding(8) }
+   .buttonStyle(.borderedProminent).tint(.cyan).disabled(movie == nil || p.working)
+   if p.output != nil {
+    Button { share = true } label: { Label("إرسال الملف الناتج إلى TikTok / مشاركة", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity).padding(8) }.buttonStyle(.bordered)
+   }
+  }
+ }
+
+ private func card<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+  VStack(alignment: .leading, spacing: 12) { content() }.padding(17)
+   .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 23))
+   .overlay(RoundedRectangle(cornerRadius: 23).stroke(.white.opacity(0.08)))
+ }
 }
