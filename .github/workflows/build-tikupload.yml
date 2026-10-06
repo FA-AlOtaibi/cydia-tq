@@ -1,4 +1,4 @@
-name: Build TikUpload IPA
+name: Build VideoLab AI IPA
 on:
   push:
     branches: [tiktok-original-uploader]
@@ -8,17 +8,43 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - run: brew install xcodegen
-      - run: cd TikUploadProject && xcodegen generate
-      - name: Build
-        run: cd TikUploadProject && xcodebuild -project TikUpload.xcodeproj -scheme TikUpload -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-      - name: Package
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Embed Real-ESRGAN CoreML models
+        run: |
+          set -e
+          cd TikUploadProject
+          mkdir -p TikUpload/Models /tmp/realesrgan
+          base="https://github.com/hanxiao/real-esrgan-coreml/releases/download/v1.0.0"
+          for name in x2plus x4plus general animevideo; do
+            zip="RealESRGAN_${name}_522_fp16.zip"
+            curl -L --fail --retry 3 "$base/$zip" -o "/tmp/realesrgan/$zip"
+            unzip -q "/tmp/realesrgan/$zip" -d /tmp/realesrgan/unpacked
+          done
+          find /tmp/realesrgan/unpacked -name "*.mlpackage" -maxdepth 3 -exec cp -R {} TikUpload/Models/ \;
+          echo "Embedded models:"
+          find TikUpload/Models -maxdepth 1 -name "*.mlpackage" -print
+      - name: Generate Xcode project
+        run: cd TikUploadProject && xcodegen generate
+      - name: Build unsigned app
         run: |
           cd TikUploadProject
+          xcodebuild -project TikUpload.xcodeproj -scheme TikUpload -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+      - name: Verify embedded AI
+        run: |
+          cd TikUploadProject
+          APP="build/Build/Products/Release-iphoneos/TikUpload.app"
+          find "$APP" -maxdepth 2 -name "*.mlmodelc" -print
+          COUNT=$(find "$APP" -maxdepth 2 -name "*.mlmodelc" | wc -l | tr -d ' ')
+          test "$COUNT" -ge 4
+      - name: Package IPA
+        run: |
+          cd TikUploadProject
+          rm -rf Payload VideoLab-AI-unsigned.ipa
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/TikUpload.app Payload/
-          zip -qry TikUpload-unsigned.ipa Payload
+          zip -qry VideoLab-AI-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: TikUpload-Unsigned-IPA
-          path: TikUploadProject/TikUpload-unsigned.ipa
+          name: VideoLab-AI-Unsigned-IPA
+          path: TikUploadProject/VideoLab-AI-unsigned.ipa
