@@ -1,79 +1,98 @@
 import SwiftUI
 import PhotosUI
 import CoreTransferable
+import AVFoundation
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import UniformTypeIdentifiers
+import UIKit
 
-@main struct TikUploadApp: App { var body: some Scene { WindowGroup { ContentView() } } }
+@main struct VideoLabApp: App { var body: some Scene { WindowGroup { ContentView() } } }
 
 struct Movie: Transferable {
  let url: URL
  static var transferRepresentation: some TransferRepresentation {
   FileRepresentation(contentType: .movie) { SentTransferredFile($0.url) } importing: { r in
-   let ext=r.file.pathExtension.isEmpty ? "mp4":r.file.pathExtension
+   let ext=r.file.pathExtension.isEmpty ? "mov":r.file.pathExtension
    let d=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension(ext)
    try? FileManager.default.removeItem(at:d); try FileManager.default.copyItem(at:r.file,to:d); return Movie(url:d)
   }
  }
 }
-enum UploadState { case idle, preparing, uploading(Double), sent, failed(String) }
-struct InitResponse: Decodable {
- struct Payload:Decodable { let publish_id:String?; let upload_url:String? }
- struct APIError:Decodable { let code:String; let message:String? }
- let data:Payload?; let error:APIError?
+
+enum Engine:String,CaseIterable,Identifiable {
+ case native="Fast Native", detail="AI Detail", temporal="Temporal Pro", anime="Anime / CG"
+ var id:String{rawValue}
+ var note:String { switch self {
+  case .native:return "VideoToolbox + Core Image — الأسرع والأقل استهلاكًا"
+  case .detail:return "تحسين تفاصيل وDenoise/Sharpen قوي — جاهز لربط Real-ESRGAN"
+  case .temporal:return "تحسين متعدد الفريمات — أفضل للحركة، جاهز لربط BasicVSR++"
+  case .anime:return "إعدادات مخصصة للأنمي والرسوم — جاهز لنموذج AnimeVideo"
+ }}
 }
-@MainActor final class Uploader:ObservableObject {
- @Published var state:UploadState = .idle
- func upload(_ file:URL,token:String) async {
+enum Scale:String,CaseIterable,Identifiable { case x1="Original",x2="2×",x4="4×";var id:String{rawValue};var value:CGFloat{self == .x4 ? 4:self == .x2 ? 2:1} }
+enum Codec:String,CaseIterable,Identifiable { case hevc="HEVC",h264="H.264";var id:String{rawValue} }
+
+@MainActor final class Processor:ObservableObject {
+ @Published var progress=0.0; @Published var message="جاهز"; @Published var output:URL?; @Published var working=false
+ func process(_ input:URL,engine:Engine,scale:Scale,codec:Codec,denoise:Double,sharp:Double) async {
+  working=true;progress=0;output=nil;message="تحليل الفيديو…"
   do {
-   state = .preparing
-   let size=Int64(try file.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? 0)
-   guard size>0 else { throw NSError(domain:"TikUpload",code:1,userInfo:[NSLocalizedDescriptionKey:"تعذر قراءة الفيديو"]) }
-   let five:Int64=5_000_000, ten:Int64=10_000_000, chunk=size<five ? size:min(ten,size)
-   let count=max(1,Int(size/chunk))
-   var q=URLRequest(url:URL(string:"https://open.tiktokapis.com/v2/post/publish/inbox/video/init/")!)
-   q.httpMethod="POST"; q.setValue("Bearer \(token)",forHTTPHeaderField:"Authorization"); q.setValue("application/json; charset=UTF-8",forHTTPHeaderField:"Content-Type")
-   q.httpBody=try JSONSerialization.data(withJSONObject:["source_info":["source":"FILE_UPLOAD","video_size":size,"chunk_size":chunk,"total_chunk_count":count]])
-   let (d,r)=try await URLSession.shared.data(for:q)
-   guard let h=r as? HTTPURLResponse,(200...299).contains(h.statusCode) else { throw apiError(d,r) }
-   let x=try JSONDecoder().decode(InitResponse.self,from:d)
-   guard x.error?.code=="ok",let s=x.data?.upload_url,let u=URL(string:s) else { throw NSError(domain:"TikTok",code:2,userInfo:[NSLocalizedDescriptionKey:x.error?.message ?? x.error?.code ?? "TikTok API error"]) }
-   try await send(file,to:u,size:size,chunk:chunk); state = .sent
-  } catch { state = .failed(error.localizedDescription) }
+   let asset=AVURLAsset(url:input); guard let track=try await asset.loadTracks(withMediaType:.video).first else{throw NSError(domain:"VideoLab",code:1,userInfo:[NSLocalizedDescriptionKey:"لا يوجد مسار فيديو"])}
+   let size=try await track.load(.naturalSize); let transform=try await track.load(.preferredTransform)
+   let transformed=size.applying(transform); let base=CGSize(width:abs(transformed.width),height:abs(transformed.height))
+   var factor=scale.value
+   let maxSide=max(base.width,base.height)
+   if maxSide*factor>3840 { factor=3840/maxSide }
+   let outSize=CGSize(width:max(2,(base.width*factor).rounded(.down)),height:max(2,(base.height*factor).rounded(.down)))
+   let composition=AVMutableVideoComposition(asset:asset){ request in
+    var image=request.sourceImage.clampedToExtent()
+    if denoise>0 {
+     let n=CIFilter.noiseReduction();n.inputImage=image;n.noiseLevel=Float(min(0.1,denoise*0.1));n.sharpness=0.4;image=n.outputImage ?? image
+    }
+    if sharp>0 {
+     let s=CIFilter.sharpenLuminance();s.inputImage=image;s.sharpness=Float(sharp*1.2);image=s.outputImage ?? image
+    }
+    if engine == .anime {
+     let c=CIFilter.colorControls();c.inputImage=image;c.saturation=1.05;c.contrast=1.03;image=c.outputImage ?? image
+    }
+    let e=image.extent; let sx=outSize.width/e.width, sy=outSize.height/e.height
+    request.finish(with:image.transformed(by:CGAffineTransform(scaleX:sx,y:sy)).cropped(to:CGRect(origin:.zero,size:outSize)),context:nil)
+   }
+   composition.renderSize=outSize
+   let fps=try await track.load(.nominalFrameRate); composition.frameDuration=CMTime(value:1,timescale:CMTimeScale(max(24,min(60,Int32(fps.rounded())))))
+   let out=FileManager.default.temporaryDirectory.appendingPathComponent("VideoLab-"+UUID().uuidString).appendingPathExtension("mov")
+   guard let export=AVAssetExportSession(asset:asset,presetName: codec == .hevc ? AVAssetExportPresetHEVCHighestQuality:AVAssetExportPresetHighestQuality) else{throw NSError(domain:"VideoLab",code:2,userInfo:[NSLocalizedDescriptionKey:"تعذر إنشاء جلسة التصدير"])}
+   export.videoComposition=composition;export.outputURL=out;export.outputFileType=.mov;export.shouldOptimizeForNetworkUse=false
+   message=engine == .native ? "معالجة Native…":"معالجة \(engine.rawValue)…"
+   let watcher=Task { while !Task.isCancelled { self.progress=Double(export.progress); try? await Task.sleep(for:.milliseconds(150)) } }
+   await export.export();watcher.cancel()
+   guard export.status == .completed else{throw export.error ?? NSError(domain:"VideoLab",code:3,userInfo:[NSLocalizedDescriptionKey:"فشل التصدير"])}
+   output=out;progress=1;message="تم — جاهز للحفظ أو الإرسال إلى TikTok"
+  } catch { message=error.localizedDescription }
+  working=false
  }
- private func send(_ file:URL,to url:URL,size:Int64,chunk:Int64) async throws {
-  let f=try FileHandle(forReadingFrom:file); defer{try? f.close()}; var offset:Int64=0
-  while offset<size {
-   let remaining=size-offset; var length=min(chunk,remaining)
-   if remaining>chunk && remaining-chunk<5_000_000 { length=remaining }
-   try f.seek(toOffset:UInt64(offset))
-   guard let data=try f.read(upToCount:Int(length)),!data.isEmpty else { throw NSError(domain:"TikUpload",code:3,userInfo:[NSLocalizedDescriptionKey:"تعذر قراءة جزء من الفيديو"]) }
-   let end=offset+Int64(data.count)-1; var q=URLRequest(url:url); q.httpMethod="PUT"
-   let ext=file.pathExtension.lowercased(); q.setValue(ext=="mov" ? "video/quicktime":(ext=="webm" ? "video/webm":"video/mp4"),forHTTPHeaderField:"Content-Type")
-   q.setValue(String(data.count),forHTTPHeaderField:"Content-Length"); q.setValue("bytes \(offset)-\(end)/\(size)",forHTTPHeaderField:"Content-Range")
-   let (reply,response)=try await URLSession.shared.upload(for:q,from:data)
-   guard let h=response as? HTTPURLResponse,[200,201,206].contains(h.statusCode) else { throw apiError(reply,response) }
-   offset=end+1; state = .uploading(Double(offset)/Double(size))
-  }
- }
- private func apiError(_ d:Data,_ r:URLResponse)->Error { let c=(r as? HTTPURLResponse)?.statusCode ?? -1; return NSError(domain:"TikTok",code:c,userInfo:[NSLocalizedDescriptionKey:"TikTok HTTP \(c): "+(String(data:d,encoding:.utf8) ?? "")]) }
 }
+
+struct ShareSheet:UIViewControllerRepresentable {
+ let url:URL
+ func makeUIViewController(context:Context)->UIActivityViewController{UIActivityViewController(activityItems:[url],applicationActivities:nil)}
+ func updateUIViewController(_ uiViewController:UIActivityViewController,context:Context){}
+}
+
 struct ContentView:View {
- @StateObject var up=Uploader(); @AppStorage("tt_token") var token=""; @State var pick:PhotosPickerItem?; @State var movie:Movie?; @State var loading=false; @State var show=false
- var busy:Bool { if case .preparing=up.state{return true}; if case .uploading=up.state{return true}; return false }
+ @StateObject var p=Processor();@State var item:PhotosPickerItem?;@State var movie:Movie?;@State var engine:Engine = .native;@State var scale:Scale = .x2;@State var codec:Codec = .hevc;@State var denoise=0.25;@State var sharp=0.35;@State var share=false
  var body:some View {
-  NavigationStack { ZStack {
-   LinearGradient(colors:[.black,Color(red:0.03,green:0.07,blue:0.09)],startPoint:.top,endPoint:.bottom).ignoresSafeArea()
-   ScrollView { VStack(spacing:20) {
-    Image(systemName:"arrow.up.circle.fill").font(.system(size:64)).foregroundStyle(.cyan)
-    Text("TikUpload").font(.system(size:34,weight:.bold,design:.rounded))
-    Text("رفع الملف الأصلي مباشرة عبر TikTok API").foregroundStyle(.secondary)
-    card { Label("الفيديو",systemImage:"film.stack").font(.headline); PhotosPicker(selection:$pick,matching:.videos){ HStack{Image(systemName:movie==nil ? "plus":"checkmark.circle.fill");Text(loading ? "جاري تجهيز الملف…":movie==nil ? "اختر فيديو من الصور":"تم اختيار الفيديو");Spacer()}.padding().background(.white.opacity(0.08),in:RoundedRectangle(cornerRadius:16)) } }
-    card { HStack{Label("Access Token",systemImage:"key.fill").font(.headline);Spacer();Button(show ? "إخفاء":"إظهار"){show.toggle()}}; if show{TextField("act....",text:$token)}else{SecureField("act....",text:$token)}; Text("يلزم token بصلاحية video.upload").font(.caption).foregroundStyle(.secondary) }
-    card { status; Button{if let movie{Task{await up.upload(movie.url,token:token)}}}label:{HStack{Spacer();Image(systemName:"paperplane.fill");Text("ارفع إلى TikTok");Spacer()}.padding(10).font(.headline)}.buttonStyle(.borderedProminent).tint(.cyan).disabled(movie==nil || token.isEmpty || busy) }
-    Text("لا يعيد التطبيق ترميز الفيديو أو ضغطه قبل الرفع؛ يرسل بايتات الملف نفسه. TikTok قد يعالج أو يعيد ترميز الفيديو بعد الاستلام.").font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-   }.padding(20) }
-  }.preferredColorScheme(.dark) }.onChange(of:pick){_,v in guard let v else{return};Task{loading=true;movie=try? await v.loadTransferable(type:Movie.self);loading=false;up.state = .idle}}
- }
- @ViewBuilder var status:some View { switch up.state { case .idle:Text("جاهز").foregroundStyle(.secondary);case .preparing:ProgressView("بدء جلسة الرفع…");case .uploading(let p):VStack{ProgressView(value:p);Text("\(Int(p*100))%").font(.caption).monospacedDigit()};case .sent:Label("تم الإرسال — افتح إشعار TikTok لإكمال النشر",systemImage:"checkmark.seal.fill").foregroundStyle(.green);case .failed(let e):Text(e).font(.caption).foregroundStyle(.red).textSelection(.enabled) } }
- func card<C:View>(@ViewBuilder _ c:()->C)->some View { VStack(alignment:.leading,spacing:12){c()}.padding(18).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:24)).overlay(RoundedRectangle(cornerRadius:24).stroke(.white.opacity(0.08))) }
+  NavigationStack{ZStack{
+   LinearGradient(colors:[.black,Color(red:0.025,green:0.055,blue:0.08)],startPoint:.top,endPoint:.bottom).ignoresSafeArea()
+   ScrollView{VStack(spacing:18){
+    VStack(spacing:5){Image(systemName:"sparkles.tv.fill").font(.system(size:55)).foregroundStyle(.cyan);Text("VideoLab").font(.system(size:34,weight:.bold,design:.rounded));Text("Upscale • Restore • TikTok").foregroundStyle(.secondary)}
+    card{PhotosPicker(selection:$item,matching:.videos){HStack{Image(systemName:"film.stack");Text(movie==nil ? "اختر الفيديو الأصلي":"تم اختيار الفيديو");Spacer();Image(systemName:"chevron.right")}.padding(14).background(.white.opacity(0.07),in:RoundedRectangle(cornerRadius:15))}}
+    card{Text("المحرك").font(.headline);ForEach(Engine.allCases){e in Button{engine=e}{HStack(alignment:.top){Image(systemName:engine==e ? "checkmark.circle.fill":"circle").foregroundStyle(engine==e ? .cyan:.secondary);VStack(alignment:.leading){Text(e.rawValue).foregroundStyle(.primary);Text(e.note).font(.caption).foregroundStyle(.secondary)};Spacer()}.padding(.vertical,5)}}}
+    card{Text("الإخراج").font(.headline);Picker("Scale",selection:$scale){ForEach(Scale.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);Picker("Codec",selection:$codec){ForEach(Codec.allCases){Text($0.rawValue).tag($0)}}.pickerStyle(.segmented);HStack{Text("Denoise");Slider(value:$denoise);Text("\(Int(denoise*100))").monospacedDigit().frame(width:30)};HStack{Text("Sharpen");Slider(value:$sharp);Text("\(Int(sharp*100))").monospacedDigit().frame(width:30)}}
+    card{Text(p.message).font(.footnote);if p.working{ProgressView(value:p.progress);Text("\(Int(p.progress*100))%").font(.caption).monospacedDigit()};Button{if let m=movie{Task{await p.process(m.url,engine:engine,scale:scale,codec:codec,denoise:denoise,sharp:sharp)}}}label:{Label("ابدأ التحسين",systemImage:"wand.and.stars").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.borderedProminent).tint(.cyan).disabled(movie==nil || p.working);if p.output != nil{Button{share=true}label:{Label("إرسال الملف الناتج إلى TikTok / مشاركة",systemImage:"square.and.arrow.up").frame(maxWidth:.infinity).padding(8)}.buttonStyle(.bordered)}}
+    Text("Fast Native يعمل بالكامل الآن على الجهاز. أوضاع AI الثقيلة ظاهرة كمسارات مستقلة، والنسخة الحالية تستخدم fallback محلي حتى تُضمّن أوزان النماذج داخل التطبيق. لا يوجد TikTok API أو Token. TikTok قد يعيد معالجة الملف بعد استلامه.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+   }.padding(18)}
+  }.preferredColorScheme(.dark)}.onChange(of:item){_,v in guard let v else{return};Task{movie=try? await v.loadTransferable(type:Movie.self);p.output=nil;p.message="جاهز"}}.sheet(isPresented:$share){if let u=p.output{ShareSheet(url:u)}}}
+ func card<C:View>(@ViewBuilder _ c:()->C)->some View{VStack(alignment:.leading,spacing:12){c()}.padding(17).background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:23)).overlay(RoundedRectangle(cornerRadius:23).stroke(.white.opacity(0.08)))}
 }
