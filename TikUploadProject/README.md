@@ -1,0 +1,1 @@
+Native iOS TikTok Upload API client. Sends original file bytes with FILE_UPLOAD; requires video.upload access token. TikTok may still process/transcode after ingestion.
