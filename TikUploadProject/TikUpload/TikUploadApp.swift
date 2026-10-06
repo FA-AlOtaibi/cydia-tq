@@ -62,7 +62,7 @@ enum Codec:String,CaseIterable,Identifiable { case hevc="HEVC",h264="H.264";var 
     throw NSError(domain:"VideoLabAI",code:20,userInfo:[NSLocalizedDescriptionKey:"تعذر تحميل نموذج Real-ESRGAN المضمّن"])
    }
    let composition = AVMutableVideoComposition(asset: asset) { request in
-    var image = request.sourceImage.clampedToExtent()
+    var image = request.sourceImage
     if denoise > 0 {
      let n = CIFilter.noiseReduction(); n.inputImage = image; n.noiseLevel = Float(min(0.1, denoise * 0.1)); n.sharpness = 0.4; image = n.outputImage ?? image
     }
