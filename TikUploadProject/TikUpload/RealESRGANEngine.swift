@@ -6,6 +6,7 @@ import CoreGraphics
 final class RealESRGANEngine {
     enum ModelKind:String { case x2plus="RealESRGAN_x2plus_522_fp16", x4plus="RealESRGAN_x4plus_522_fp16", general="RealESRGAN_general_522_fp16", animevideo="RealESRGAN_animevideo_522_fp16" }
     private let model:MLModel
+    private let inferenceLock = NSLock()
     private let inputName:String
     private let outputName:String
     private let scale:Int
@@ -26,7 +27,10 @@ final class RealESRGANEngine {
     }
 
     func upscale(_ source:CIImage,target:CGSize) throws -> CIImage {
-        let src=source.cropped(to:source.extent)
+        inferenceLock.lock(); defer { inferenceLock.unlock() }
+        let finite = source.extent
+        guard finite.width.isFinite, finite.height.isFinite, finite.width > 0, finite.height > 0 else { throw NSError(domain:"VideoLabAI",code:12,userInfo:[NSLocalizedDescriptionKey:"Invalid video frame extent"]) }
+        let src=source.cropped(to:finite)
         let w=Int(src.extent.width), h=Int(src.extent.height)
         let outW=w*scale,outH=h*scale
         guard let cs=CGColorSpace(name:CGColorSpace.sRGB) else { return source }
