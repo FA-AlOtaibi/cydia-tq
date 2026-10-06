@@ -1,0 +1,24 @@
+name: Build TikUpload IPA
+on:
+  push:
+    branches: [tiktok-original-uploader]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd TikUploadProject && xcodegen generate
+      - name: Build
+        run: cd TikUploadProject && xcodebuild -project TikUpload.xcodeproj -scheme TikUpload -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+      - name: Package
+        run: |
+          cd TikUploadProject
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/TikUpload.app Payload/
+          zip -qry TikUpload-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TikUpload-Unsigned-IPA
+          path: TikUploadProject/TikUpload-unsigned.ipa
