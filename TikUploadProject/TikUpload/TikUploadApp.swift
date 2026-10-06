@@ -34,7 +34,7 @@ enum Scale:String,CaseIterable,Identifiable { case x1="Original",x2="2×",x4="4�
 enum Codec:String,CaseIterable,Identifiable { case hevc="HEVC",h264="H.264";var id:String{rawValue} }
 
 @MainActor final class Processor:ObservableObject {
- @Published var progress=0.0; @Published var message="جاهز"; @Published var output:URL?; @Published var working=false
+  working = false
  func process(_ input:URL,engine:Engine,scale:Scale,codec:Codec,denoise:Double,sharp:Double) async {
   working=true;progress=0;output=nil;message="تحليل الفيديو…"
   do {
@@ -79,14 +79,14 @@ enum Codec:String,CaseIterable,Identifiable { case hevc="HEVC",h264="H.264";var 
    let fps=try await track.load(.nominalFrameRate); composition.frameDuration=CMTime(value:1,timescale:CMTimeScale(max(24,min(60,Int32(fps.rounded())))))
    let out=FileManager.default.temporaryDirectory.appendingPathComponent("VideoLab-"+UUID().uuidString).appendingPathExtension("mov")
    guard let export=AVAssetExportSession(asset:asset,presetName: codec == .hevc ? AVAssetExportPresetHEVCHighestQuality:AVAssetExportPresetHighestQuality) else{throw NSError(domain:"VideoLab",code:2,userInfo:[NSLocalizedDescriptionKey:"تعذر إنشاء جلسة التصدير"])}
-   export.videoComposition=composition;export.outputURL=out;export.outputFileType=.mov;export.shouldOptimizeForNetworkUse=false
-   message = engine == .native ? "معالجة Native…" : "معالجة \\(engine.rawValue)…"
-   let watcher=Task { while !Task.isCancelled { self.progress=Double(export.progress); try? await Task.sleep(for:.milliseconds(150)) } }
-   await export.export();watcher.cancel()
+   export.videoComposition = composition; export.outputURL = out; export.outputFileType = .mov; export.shouldOptimizeForNetworkUse = false
+   message = engine == .native ? "معالجة Native…" : "معالجة \(engine.rawValue)…"
+   let watcher = Task { while !Task.isCancelled { self.progress = Double(export.progress); try? await Task.sleep(for: .milliseconds(150)) } }
+   await export.export(); watcher.cancel()
    guard export.status == .completed else{throw export.error ?? NSError(domain:"VideoLab",code:3,userInfo:[NSLocalizedDescriptionKey:"فشل التصدير"])}
-   output=out;progress=1;message="تم — جاهز للحفظ أو الإرسال إلى TikTok"
+   output = out; progress = 1; message = "تم — جاهز للحفظ أو الإرسال إلى TikTok"
   } catch { message=error.localizedDescription }
-  working=false
+  working = false
  }
 }
 
