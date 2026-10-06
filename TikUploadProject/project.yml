@@ -1,0 +1,22 @@
+name: TikUpload
+options:
+  bundleIdPrefix: com.fahad
+  deploymentTarget: { iOS: "17.0" }
+targets:
+  TikUpload:
+    type: application
+    platform: iOS
+    sources: [TikUpload]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.fahad.tikupload
+        PRODUCT_NAME: TikUpload
+        SWIFT_VERSION: 5.0
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "TikUpload"
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "اختر الفيديو الذي تريد رفعه إلى TikTok."
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
