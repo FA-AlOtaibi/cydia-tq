@@ -33,7 +33,7 @@ jobs:
       - name: Verify embedded AI
         run: |
           cd TikUploadProject
-          APP="build/Build/Products/Release-iphoneos/TikUpload.app"
+          APP="build/Build/Products/Release-iphoneos/VideoLab.app"
           find "$APP" -maxdepth 2 -name "*.mlmodelc" -print
           COUNT=$(find "$APP" -maxdepth 2 -name "*.mlmodelc" | wc -l | tr -d ' ')
           test "$COUNT" -ge 4
@@ -42,7 +42,7 @@ jobs:
           cd TikUploadProject
           rm -rf Payload VideoLab-AI-unsigned.ipa
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/TikUpload.app Payload/
+          cp -R build/Build/Products/Release-iphoneos/VideoLab.app Payload/
           zip -qry VideoLab-AI-unsigned.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
