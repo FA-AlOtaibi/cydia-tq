@@ -1,0 +1,17 @@
+name: FieldWatch
+options:
+  bundleIdPrefix: com.fieldwatch
+settings:
+  IPHONEOS_DEPLOYMENT_TARGET: '17.0'
+  SWIFT_VERSION: '5.9'
+targets:
+  FieldWatch:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.fieldwatch.scanner
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "FieldWatch scans nearby Bluetooth LE devices."
+      TARGETED_DEVICE_FAMILY: '1'
+      CODE_SIGNING_ALLOWED: NO
