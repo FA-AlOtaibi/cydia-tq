@@ -1,0 +1,31 @@
+name: FieldWatch iOS build
+on:
+  push:
+    branches: [fieldwatch-ios]
+    paths:
+      - 'FieldWatchIOS/**'
+      - '.github/workflows/fieldwatch-ios.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: FieldWatchIOS
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Compile
+        run: xcodebuild -project FieldWatch.xcodeproj -scheme FieldWatch -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/FieldWatch.app Payload/
+          zip -qry FieldWatch-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FieldWatch-unsigned-IPA
+          path: FieldWatchIOS/FieldWatch-unsigned.ipa
